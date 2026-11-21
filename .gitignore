@@ -1,0 +1,31 @@
+# Environment & Secrets (NEVER commit)
+.env
+.env.*
+!.env.example
+app/env.json
+*.jks
+*.keystore
+key.properties
+google-services.json
+GoogleService-Info.plist
+
+# Database dumps & local backups
+*.sql.bak
+*.dump
+*.csv.local
+
+# Flutter / Dart build artifacts
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/build/
+app/.packages
+app/pubspec.lock.bak
+app/android/local.properties
+app/android/.gradle/
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
