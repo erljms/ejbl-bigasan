@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EJBL Bigasan — Interactive OOUX Database-to-UI Explorer</title>
+<style>
+  :root {
+    --green: #1B5E20; --green-soft: #E8F5E9;
+    --navy: #1B365D; --blue-soft: #E8F0FE;
+    --amber: #B45309; --amber-soft: #FEF3C7;
+    --red: #991B1B; --red-soft: #FEE2E2;
+    --bg: #F1F5F9; --card: #FFFFFF; --border: #CBD5E1; --text: #0F172A; --muted: #475569;
+  }
+  * { box-sizing: border-box; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  body { margin: 0; background: var(--bg); color: var(--text); }
+  header {
+    background: var(--navy); color: #fff; padding: 12px 20px;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+    position: sticky; top: 0; z-index: 20; box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  }
+  header h1 { margin: 0; font-size: 16px; }
+  header small { opacity: 0.85; font-size: 12px; display: block; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .pill-group { background: rgba(255,255,255,0.14); padding: 3px; border-radius: 999px; display: inline-flex; gap: 2px; }
+  .pill-btn {
+    border: none; background: transparent; color: #E2E8F0; padding: 6px 12px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.15s;
+  }
+  .pill-btn.active { background: #fff; color: var(--navy); }
+  .layout {
+    display: grid; grid-template-columns: 1fr 390px; gap: 18px;
+    max-width: 1420px; margin: 18px auto; padding: 0 18px 28px;
+  }
+  @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
+
+  /* Device Preview Stage */
+  .stage { display: flex; justify-content: center; align-items: flex-start; }
+  .device {
+    background: var(--card); border: 2px solid var(--border); border-radius: 22px;
+    overflow: hidden; box-shadow: 0 10px 28px rgba(15,23,42,0.12); transition: width 0.2s;
+    display: flex; flex-direction: column; min-height: 680px;
+  }
+  .device.mobile { width: 410px; max-width: 100%; }
+  .device.web { width: 100%; border-radius: 14px; }
+
+  .app-bar {
+    background: var(--green); color: #fff; padding: 12px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .app-bar .role-tag {
+    background: rgba(255,255,255,0.2); padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  }
+  .app-body-wrap { display: flex; flex: 1; min-height: 560px; }
+  .web-rail {
+    width: 185px; background: #F8FAFC; border-right: 1px solid var(--border);
+    padding: 10px 8px; display: none; flex-direction: column; gap: 4px;
+  }
+  .device.web .web-rail { display: flex; }
+  .rail-btn {
+    text-align: left; border: none; background: transparent; padding: 10px 12px; border-radius: 10px;
+    font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer;
+  }
+  .rail-btn.active { background: var(--green-soft); color: var(--green); }
+
+  .screen { flex: 1; padding: 14px; overflow-y: auto; max-height: 620px; }
+  .bottom-nav {
+    border-top: 1px solid var(--border); background: #fff; display: flex; justify-content: space-around; padding: 6px 4px;
+  }
+  .device.web .bottom-nav { display: none; }
+  .nav-btn {
+    border: none; background: transparent; padding: 6px 8px; border-radius: 8px;
+    font-size: 11px; font-weight: 600; color: var(--muted); cursor: pointer;
+  }
+  .nav-btn.active { background: var(--green-soft); color: var(--green); }
+
+  /* UI Cards & OOUX Highlight */
+  .ooux {
+    border: 1.5px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 10px;
+    background: #fff; cursor: pointer; position: relative; transition: 0.15s;
+  }
+  .ooux:hover, .ooux.selected { border-color: var(--navy); box-shadow: 0 0 0 3px rgba(27,54,93,0.14); }
+  .ooux-tag {
+    position: absolute; top: -9px; right: 10px; background: var(--navy); color: #fff;
+    font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+  }
+  .hide-tags .ooux-tag { display: none; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 10px; }
+  .device.web .kpi-grid { grid-template-columns: repeat(4, 1fr); }
+  .kpi { border-radius: 10px; padding: 10px; border: 1px solid var(--border); background: #F8FAFC; }
+  .kpi strong { display: block; font-size: 16px; margin-top: 2px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .chip {
+    border: 1px solid var(--border); background: #F8FAFC; border-radius: 999px;
+    padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .chip.active { background: var(--green); color: #fff; border-color: var(--green); }
+  .chip.low { background: var(--red-soft); color: var(--red); border-color: #FCA5A5; }
+  .chip.amber { background: var(--amber-soft); color: var(--amber); border-color: #FCD34D; }
+  .chip.blue { background: var(--blue-soft); color: var(--navy); border-color: #93C5FD; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .btn {
+    border: none; border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  .btn-primary { background: var(--green); color: #fff; }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-outline { background: #fff; border: 1px solid var(--border); color: var(--text); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .banner {
+    padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; margin-bottom: 10px;
+  }
+  .banner.amber { background: var(--amber-soft); color: var(--amber); border: 1px solid #FCD34D; }
+  .banner.red { background: var(--red-soft); color: var(--red); border: 1px solid #FCA5A5; }
+  .banner.green { background: var(--green-soft); color: var(--green); border: 1px solid #86EFAC; }
+  .bar-bg { height: 7px; background: #E2E8F0; border-radius: 99px; overflow: hidden; margin-top: 6px; }
+  .bar-fill { height: 100%; background: var(--green); }
+  .bar-fill.low { background: var(--red); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+  th, td { text-align: left; padding: 6px; border-bottom: 1px solid #E2E8F0; }
+  th { background: #F8FAFC; color: var(--navy); }
+  input[type="number"], input[type="text"] {
+    width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px;
+  }
+
+  /* Right Panel: Live OOUX Database Inspector */
+  .inspector {
+    background: #0F172A; color: #E2E8F0; border-radius: 16px; padding: 16px;
+    position: sticky; top: 76px; max-height: calc(100vh - 96px); overflow-y: auto;
+    box-shadow: 0 10px 28px rgba(15,23,42,0.18);
+  }
+  .inspector h2 { margin: 0 0 6px; font-size: 15px; color: #fff; }
+  .inspector .sub { font-size: 12px; color: #94A3B8; margin-bottom: 12px; }
+  .ins-box {
+    background: #1E293B; border: 1px solid #334155; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px;
+  }
+  .ins-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: #94A3B8; font-weight: 700; }
+  .ins-val { font-size: 13px; margin-top: 4px; color: #F8FAFC; line-height: 1.45; }
+  pre {
+    background: #020617; color: #86EFAC; padding: 10px; border-radius: 8px;
+    font-size: 11px; overflow-x: auto; margin: 6px 0 0; line-height: 1.4;
+  }
+  .rls-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-top: 4px; }
+  .rls-ok { background: #14532D; color: #86EFAC; }
+  .rls-view { background: #78350F; color: #FDE68A; }
+  .rls-block { background: #7F1D1D; color: #FECACA; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>EJBL Bigasan — OOUX Database-to-UI Explorer</h1>
+    <small>Click any card, tab, or button to inspect its exact PostgreSQL table, foreign-key relation, RLS rule & SQL RPC</small>
+  </div>
+  <div class="controls">
+    <div class="pill-group" id="roleGroup">
+      <button class="pill-btn" data-role="staff">Employee / Staff</button>
+      <button class="pill-btn" data-role="manager">Manager</button>
+      <button class="pill-btn active" data-role="admin">Admin / Owner</button>
+    </div>
+    <div class="pill-group" id="deviceGroup">
+      <button class="pill-btn active" data-dev="mobile">Android</button>
+      <button class="pill-btn" data-dev="web">Web PWA</button>
+    </div>
+    <button class="pill-btn active" id="toggleTags" style="border:1px solid rgba(255,255,255,0.35);">DB Tags: ON</button>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="stage">
+    <div class="device mobile" id="device">
+      <div class="app-bar">
+        <div>
+          <strong style="font-size:15px;">EJBL Bigasan</strong>
+          <div style="font-size:11px;opacity:0.85;">Online • Supabase PostgreSQL</div>
+        </div>
+        <span class="role-tag" id="roleTag">ADMIN / OWNER</span>
+      </div>
+      <div class="app-body-wrap">
+        <nav class="web-rail" id="webRail"></nav>
+        <main class="screen" id="screen"></main>
+      </div>
+      <nav class="bottom-nav" id="bottomNav"></nav>
+    </div>
+  </div>
+
+  <aside class="inspector" id="inspector">
+    <h2>OOUX Database Inspector</h2>
+    <div class="sub">Click any element inside the preview to inspect its backend contract.</div>
+    <div id="insContent"></div>
+  </aside>
+</div>
+
+<script>
+const STATE = {
+  role: 'admin',
+  device: 'mobile',
+  tab: 'home',
+  showTags: true,
+  selectedRice: 'CP',
+  unit: 'SACK',
+  qty: 2,
+  fulfill: 'pickup',
+  invType: 'SI',
+  payMode: 'split',
+  eodCash: 6250,
+  eodGcash: 2200,
+  birBook: 'CRJ',
+  activeKey: 'home_kpi'
+};
+
+const RICE = [
+  { code: 'CP', name: 'COCO PANDAN', kg: 175, sacks: 7, reorder: 50, ws: 1300, rs: 1350, rkg: 54, batches: [
+    { date: '2026-11-05', rem: 25, cost: 44.00, inv: 'DR-1012' },
+    { date: '2026-11-15', rem: 150, cost: 48.00, inv: 'DR-1044' }
+  ]},
+  { code: 'MC', name: 'MAGIC CASTLE', kg: 525, sacks: 21, reorder: 50, ws: 1250, rs: 1250, rkg: 50, batches: [
+    { date: '2026-11-13', rem: 525, cost: 44.80, inv: 'DR-20712' }
+  ]},
+  { code: 'PH', name: 'PRINCESS HASMIN', kg: 15, sacks: 0.6, reorder: 50, ws: 1270, rs: 1350, rkg: 54, batches: [
+    { date: '2026-10-28', rem: 15, cost: 46.00, inv: 'DR-989' }
+  ]}
+];
+
+const OOUX_SPECS = {
+  home_kpi: {
+    title: 'Home / Daily Pulse KPI Cards',
+    tables: 'v_cashbook_entries, expenses, sales (is_consignment), v_inventory_summary',
+    relation: 'Aggregated read views (security_invoker = true)',
+    rls: { staff: ['Hidden (No Home tab)', 'rls-block'], manager: ['Allowed (Read KPIs)', 'rls-ok'], admin: ['Allowed (Full KPIs)', 'rls-ok'] },
+    ux: 'Gives Owner/Manager an instant daily snapshot without opening 5 separate Excel sheets.',
+    rpc: '// Read-only aggregate queries\nselect * from v_inventory_summary where is_low_stock = true;\nselect * from v_cashbook_entries where entry_date = today;'
+  },
+  log_pos: {
+    title: 'Log In — Quick Rice POS Form',
+    tables: 'sales (1) -> sale_items (N) -> sale_fifo_allocations (N) + sale_payments (N)',
+    relation: '1:N multi-item invoice; FK rice_variety_id; optional FK consignment_client_id',
+    rls: { staff: ['Insert allowed; Price Override BLOCKED server-side', 'rls-view'], manager: ['Full insert + Price Override allowed', 'rls-ok'], admin: ['Full insert + Price Override allowed', 'rls-ok'] },
+    ux: 'Tap Rice Chips (live stock) -> auto-computes tiered walk-in/delivery price. SI auto-posts to BIR; NSI stays Cashbook Only.',
+    rpc: "supabase.rpc('create_sale', {\n  p_invoice_type: 'SI', // SI -> BIR + Cashbook | NSI -> Cashbook only\n  p_fulfillment_type: 'pickup',\n  p_delivery_fee: 0,\n  p_items: [{ rice_variety_id, qty_input: 2, unit: 'SACK' }],\n  p_payments: [\n    { method: 'cash', amount: 1600 },\n    { method: 'gcash', amount: 1000, reference_no: 'GCASH-30408' }\n  ]\n})"
+  },
+  inv_cards: {
+    title: 'Inventory Stock Cards + FIFO Batch Drill-Down',
+    tables: 'v_inventory_summary -> rice_varieties (1) -> stock_batches (N) <-> expenses (1, COGS)',
+    relation: 'Tapping a Rice Card drills down 1:N into oldest-first FIFO stock_batches.',
+    rls: { staff: ['View Stock & Price Guide ONLY (Receive Stock hidden)', 'rls-view'], manager: ['Full Inventory + receive_stock() allowed', 'rls-ok'], admin: ['Full Inventory + receive_stock() allowed', 'rls-ok'] },
+    ux: 'Red LOW STOCK pill triggers automatically when total_remaining_kg <= ordering_point_kg. Receiving stock atomically creates the COGS expense & CDJ/GL entry.',
+    rpc: "supabase.rpc('receive_stock', {\n  p_rice_variety_id, p_received_date: '2026-11-21',\n  p_qty_kg: 250, p_unit_cost_per_kg: 44.80,\n  p_payment_method: 'cash', p_supplier_invoice_no: 'DR-1055'\n})"
+  },
+  consign_cards: {
+    title: 'B2B Consignment Client Cards & Collection Sheet',
+    tables: 'consignment_clients (1) -> sales (N, is_consignment=true) -> sale_payments (N)',
+    relation: 'Client card aggregates unpaid/partial sales; Collect Payment inserts sale_payments.',
+    rls: { staff: ['Can log delivery & collect; cannot manage clients', 'rls-view'], manager: ['Full consignment management', 'rls-ok'], admin: ['Full consignment management', 'rls-ok'] },
+    ux: 'Stock deducts immediately on delivery, while Cashbook & BIR CRJ (for SI) update ONLY when partial/full payment is collected.',
+    rpc: "supabase.rpc('record_consignment_payment', {\n  p_sale_id, p_payment_date: '2026-11-22',\n  p_method: 'gcash', p_amount: 1500,\n  p_reference_no: 'GCASH-99112'\n})"
+  },
+  biz_records: {
+    title: 'Business Records (Cashbook, Expenses & EOD Cash Box)',
+    tables: 'v_cashbook_entries (View), expenses, daily_cash_reconciliations',
+    relation: 'Auto-populated from Log; 1:1 link from COGS expenses to stock_batches.',
+    rls: { staff: ['BLOCKED (No Business Records tab; RLS filters rows)', 'rls-block'], manager: ['VIEW-ONLY (amber banner; cannot edit reconciliation)', 'rls-view'], admin: ['FULL ACCESS (can save EOD Cash Box reconciliation)', 'rls-ok'] },
+    ux: 'Replaces Excel CASHBOOK & SOBRA/SHORT formulas. Shows live Expected vs. Counted variance.',
+    rpc: "// Auto-populated view (security_invoker = true)\nselect * from v_cashbook_entries order by entry_date desc;"
+  },
+  void_flow: {
+    title: 'Void / Cancel Modal & Immutable Owner Audit Log',
+    tables: 'sales / expenses (status=voided) -> void_audit_logs (JSONB snapshot) + sale_fifo_allocations',
+    relation: 'No hard DELETE anywhere; void_sale restores exact kg to original stock_batches.',
+    rls: { staff: ['BLOCKED (Staff cannot void saved records)', 'rls-block'], manager: ['Can void with required reason; sees own voids', 'rls-view'], admin: ['Can void & reviews ALL void_audit_logs (immutable)', 'rls-ok'] },
+    ux: 'COGS restock expenses block direct voiding to protect FIFO batch integrity.',
+    rpc: "supabase.rpc('void_sale', {\n  p_sale_id, p_reason: 'Customer cancelled before release'\n})\n// Restores exact FIFO batches + writes immutable void_audit_logs"
+  },
+  bir_books: {
+    title: '4 BIR Books (GL, CRJ, CDJ, GJ) + Capital + PDF Export',
+    tables: 'bir_ledger_entries + capital_entries (linked_expense_id <-> DRAW expenses)',
+    relation: 'source_type + source_id chip links every row back to SI sale, expense, capital, or void.',
+    rls: { staff: ['BLOCKED (RLS returns 0 rows; writes rejected)', 'rls-block'], manager: ['BLOCKED (RLS returns 0 rows; writes rejected)', 'rls-block'], admin: ['ADMIN ONLY — Auto SI posting + Manual Edit + Export PDF', 'rls-ok'] },
+    ux: 'Only receipted (SI) sales auto-post; NSI stays in Cashbook for Owner/Bookkeeper review. PDF export uses Flutter pdf + printing packages.',
+    rpc: "// Admin-only ledger query + manual journal entry\nselect * from bir_ledger_entries where book_type = 'CRJ';\n// Export PDF scoped exclusively to the 4 BIR books"
+  }
+};
+
+function getTabsForRole(role) {
+  if (role === 'staff') return [
+    { id: 'log', label: 'Log' },
+    { id: 'inventory', label: 'Inventory' }
+  ];
+  if (role === 'manager') return [
+    { id: 'log', label: 'Log' },
+    { id: 'inventory', label: 'Inventory' },
+    { id: 'consignment', label: 'Consign' },
+    { id: 'records', label: 'Records' }
+  ];
+  return [
+    { id: 'home', label: 'Home' },
+    { id: 'log', label: 'Log' },
+    { id: 'inventory', label: 'Inventory' },
+    { id: 'consignment', label: 'Consign' },
+    { id: 'records', label: 'Records' },
+    { id: 'bir', label: 'BIR & More' }
+  ];
+}
+
+function inspect(key) {
+  STATE.activeKey = key;
+  const spec = OOUX_SPECS[key];
+  const [rlsText, rlsCls] = spec.rls[STATE.role];
+  document.getElementById('insContent').innerHTML = `
+    <div class="ins-box">
+      <div class="ins-label">Selected UI Component</div>
+      <div class="ins-val"><strong>${spec.title}</strong></div>
+    </div>
+    <div class="ins-box">
+      <div class="ins-label">PostgreSQL Tables / Views</div>
+      <div class="ins-val"><code>${spec.tables}</code></div>
+      <div class="ins-label" style="margin-top:8px;">Foreign-Key Relationship -> UX Pattern</div>
+      <div class="ins-val">${spec.relation}</div>
+    </div>
+    <div class="ins-box">
+      <div class="ins-label">Active Role RLS (${STATE.role.toUpperCase()})</div>
+      <div><span class="rls-pill ${rlsCls}">${rlsText}</span></div>
+      <div class="ins-val" style="margin-top:6px;font-size:12px;color:#CBD5E1;">${spec.ux}</div>
+    </div>
+    <div class="ins-box">
+      <div class="ins-label">Exact Supabase RPC / Query</div>
+      <pre>${spec.rpc}</pre>
+    </div>
+  `;
+  document.querySelectorAll('.ooux').forEach(el => {
+    el.classList.toggle('selected', el.dataset.ooux === key);
+  });
+}
+
+function render() {
+  const tabs = getTabsForRole(STATE.role);
+  if (!tabs.some(t => t.id === STATE.tab)) STATE.tab = tabs[0].id;
+
+  const dev = document.getElementById('device');
+  dev.className = `device ${STATE.device} ${STATE.showTags ? '' : 'hide-tags'}`;
+  document.getElementById('roleTag').textContent =
+    STATE.role === 'admin' ? 'ADMIN / OWNER' : STATE.role === 'manager' ? 'MANAGER' : 'EMPLOYEE / STAFF';
+
+  document.getElementById('webRail').innerHTML = tabs.map(t =>
+    `<button class="rail-btn ${t.id === STATE.tab ? 'active' : ''}" onclick="setTab('${t.id}')">${t.label}</button>`
+  ).join('');
+  document.getElementById('bottomNav').innerHTML = tabs.map(t =>
+    `<button class="nav-btn ${t.id === STATE.tab ? 'active' : ''}" onclick="setTab('${t.id}')">${t.label}</button>`
+  ).join('');
+
+  const scr = document.getElementById('screen');
+  if (STATE.tab === 'home') {
+    scr.innerHTML = `
+      <div class="ooux" data-ooux="home_kpi" onclick="inspect('home_kpi')">
+        <span class="ooux-tag">Views: cashbook + inventory</span>
+        <strong>Today's Pulse — Nov 21, 2026</strong>
+        <div class="kpi-grid" style="margin-top:8px;">
+          <div class="kpi"><small>Today Sales</small><strong>₱8,450</strong><small style="color:var(--muted)">Cash ₱6,250 • GCash ₱2,200</small></div>
+          <div class="kpi"><small>Today Expenses</small><strong>₱1,450</strong><small style="color:var(--muted)">Fuel + Supplies</small></div>
+          <div class="kpi"><small>Unpaid Consign</small><strong style="color:var(--amber)">₱3,850</strong><small style="color:var(--muted)">2 B2B Clients</small></div>
+          <div class="kpi"><small>Low Stock</small><strong style="color:var(--red)">1 Variety</strong><small style="color:var(--red)">PH: 15 kg left</small></div>
+        </div>
+        <div class="chips">
+          <button class="btn btn-primary" onclick="event.stopPropagation();setTab('log')">+ New Sale</button>
+          <button class="btn btn-outline" onclick="event.stopPropagation();setTab('inventory')">+ Receive Stock</button>
+          <button class="btn btn-outline" onclick="event.stopPropagation();setTab('bir')">Export BIR PDF</button>
+        </div>
+      </div>
+      <div class="ooux" data-ooux="void_flow" onclick="inspect('void_flow')">
+        <span class="ooux-tag">Table: void_audit_logs</span>
+        <div class="row"><strong>Recent Void Audit Alert</strong><span class="chip low">1 Voided Today</span></div>
+        <p style="font-size:12px;margin:6px 0 0;color:var(--muted)">Manager voided SI #140 (₱1,300) — Reason: "Customer switched variety". 25 kg restored to Batch DR-1012.</p>
+      </div>
+    `;
+    inspect('home_kpi');
+  } else if (STATE.tab === 'log') {
+    const r = RICE.find(x => x.code === STATE.selectedRice);
+    const guidePerKg = STATE.unit === 'SACK'
+      ? ((STATE.qty >= 3 || STATE.fulfill === 'pickup') ? r.ws / 25 : r.rs / 25)
+      : r.rkg;
+    const totalKg = STATE.unit === 'SACK' ? STATE.qty * 25 : STATE.qty;
+    const totalPhp = totalKg * guidePerKg + (STATE.fulfill === 'delivery' ? 20 : 0);
+    const canOverride = STATE.role !== 'staff';
+    scr.innerHTML = `
+      <div class="ooux" data-ooux="log_pos" onclick="inspect('log_pos')">
+        <span class="ooux-tag">RPC: create_sale()</span>
+        <div class="row"><strong>Log In — Quick Rice Sale</strong>
+          <span class="chip ${STATE.invType === 'SI' ? 'active' : 'blue'}" onclick="event.stopPropagation();STATE.invType=STATE.invType==='SI'?'NSI':'SI';render()">
+            ${STATE.invType === 'SI' ? 'SI #141 (BIR + Cashbook)' : 'NSI-176 (Cashbook Only)'}
+          </span>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px;">1. Tap Rice Variety (shows live FIFO sacks):</div>
+        <div class="chips">
+          ${RICE.map(x => `<span class="chip ${x.code===STATE.selectedRice?'active':''} ${x.kg<=x.reorder?'low':''}" onclick="event.stopPropagation();STATE.selectedRice='${x.code}';render()">${x.code} (${x.sacks} sk)</span>`).join('')}
+        </div>
+        <div class="chips">
+          <span class="chip ${STATE.unit==='SACK'?'active':''}" onclick="event.stopPropagation();STATE.unit='SACK';render()">SACK (25kg)</span>
+          <span class="chip ${STATE.unit==='KG'?'active':''}" onclick="event.stopPropagation();STATE.unit='KG';render()">KG</span>
+          <span class="chip ${STATE.fulfill==='pickup'?'active':''}" onclick="event.stopPropagation();STATE.fulfill='pickup';render()">Pick Up</span>
+          <span class="chip ${STATE.fulfill==='delivery'?'active':''}" onclick="event.stopPropagation();STATE.fulfill='delivery';render()">Delivery (+₱20)</span>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <div style="flex:1"><small>Quantity (${STATE.unit})</small><input type="number" value="${STATE.qty}" min="1" onchange="STATE.qty=Number(this.value)||1;render()" /></div>
+          <div style="flex:1"><small>Price/kg (${canOverride ? 'Editable' : 'Locked for Staff'})</small><input type="number" value="${guidePerKg.toFixed(2)}" ${canOverride ? '' : 'disabled'} /></div>
+        </div>
+        <div class="row" style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);">
+          <div><small>${totalKg} kg total ${STATE.fulfill==='delivery'?'+ ₱20 delivery fee':''}</small><div><strong style="font-size:17px;">₱${totalPhp.toLocaleString('en-PH',{minimumFractionDigits:2})}</strong></div></div>
+          <button class="btn btn-primary" onclick="event.stopPropagation();inspect('log_pos')">Save ${STATE.invType} Sale</button>
+        </div>
+      </div>
+      <div class="ooux" data-ooux="void_flow" onclick="inspect('void_flow')">
+        <span class="ooux-tag">RPC: void_sale()</span>
+        <div class="row"><strong>Today's Recent Log Entries</strong><small style="color:var(--muted)">No hard delete</small></div>
+        <div class="row" style="margin-top:8px;">
+          <div><strong>SI #140</strong> • CP 25kg • ₱1,300 <span class="chip blue">Split Cash+GCash</span></div>
+          <button class="btn btn-danger" ${STATE.role==='staff'?'disabled':''} onclick="event.stopPropagation();inspect('void_flow')">${STATE.role==='staff'?'Void Locked':'Void'}</button>
+        </div>
+      </div>
+    `;
+    inspect('log_pos');
+  } else if (STATE.tab === 'inventory') {
+    const canEdit = STATE.role !== 'staff';
+    scr.innerHTML = `
+      <div class="row" style="margin-bottom:8px;">
+        <strong>Inventory & FIFO Batches</strong>
+        <button class="btn btn-primary" ${canEdit?'':'disabled'} onclick="inspect('inv_cards')">${canEdit ? '+ Receive Stock (Auto COGS)' : 'View-Only (Staff)'}</button>
+      </div>
+      ${RICE.map(r => {
+        const low = r.kg <= r.reorder;
+        const pct = Math.min(100, Math.round((r.kg / 500) * 100));
+        return `
+        <div class="ooux" data-ooux="inv_cards" onclick="inspect('inv_cards')">
+          <span class="ooux-tag">1:N -> stock_batches</span>
+          <div class="row">
+            <div><strong>${r.name} (${r.code})</strong><div style="font-size:12px;color:var(--muted)">WS: ₱${r.ws}/sk • Retail: ₱${r.rkg}/kg</div></div>
+            <div style="text-align:right">
+              <strong style="color:${low?'var(--red)':'var(--green)'}">${r.kg} kg (${r.sacks} sk)</strong>
+              ${low ? '<div><span class="chip low">LOW STOCK</span></div>' : ''}
+            </div>
+          </div>
+          <div class="bar-bg"><div class="bar-fill ${low?'low':''}" style="width:${pct}%"></div></div>
+          <table>
+            <thead><tr><th>FIFO Batch Date</th><th>DR #</th><th>Remaining</th><th>Puhunan/kg</th></tr></thead>
+            <tbody>${r.batches.map(b => `<tr><td>${b.date}</td><td>${b.inv}</td><td>${b.rem} kg</td><td>₱${b.cost.toFixed(2)}</td></tr>`).join('')}</tbody>
+          </table>
+        </div>`;
+      }).join('')}
+    `;
+    inspect('inv_cards');
+  } else if (STATE.tab === 'consignment') {
+    scr.innerHTML = `
+      <div class="ooux" data-ooux="consign_cards" onclick="inspect('consign_cards')">
+        <span class="ooux-tag">1:N -> sales -> sale_payments</span>
+        <div class="row"><strong>GA-RA-HE</strong><span class="chip amber">Every Sunday</span></div>
+        <div style="font-size:12px;color:var(--muted);margin:4px 0;">Stock deducted on delivery • Cashbook updates only when collected</div>
+        <div class="row" style="margin-top:8px;">
+          <div><small>Unpaid Balance</small><strong style="display:block;font-size:17px;color:var(--amber)">₱2,600.00</strong></div>
+          <button class="btn btn-primary" onclick="event.stopPropagation();inspect('consign_cards')">+ Collect Payment</button>
+        </div>
+      </div>
+      <div class="ooux" data-ooux="consign_cards" onclick="inspect('consign_cards')">
+        <span class="ooux-tag">Status: Partial</span>
+        <div class="row"><strong>CARIBBEAN GRILL</strong><span class="chip amber">Every Sunday</span></div>
+        <div class="row" style="margin-top:8px;">
+          <div><small>Remaining Balance (Paid ₱1,250 of ₱2,500)</small><strong style="display:block;font-size:17px;color:var(--amber)">₱1,250.00</strong></div>
+          <button class="btn btn-primary" onclick="event.stopPropagation();inspect('consign_cards')">+ Collect Payment</button>
+        </div>
+      </div>
+    `;
+    inspect('consign_cards');
+  } else if (STATE.tab === 'records') {
+    const viewOnly = STATE.role === 'manager';
+    const expectedTotal = 8450;
+    const actualTotal = Number(STATE.eodCash) + Number(STATE.eodGcash);
+    const diff = actualTotal - expectedTotal;
+    scr.innerHTML = `
+      ${viewOnly ? '<div class="banner amber">VIEW-ONLY MODE — Manager can inspect Business Records; only Owner/Admin can reconcile Cash Box.</div>' : ''}
+      <div class="ooux" data-ooux="biz_records" onclick="inspect('biz_records')">
+        <span class="ooux-tag">View: v_cashbook_entries</span>
+        <strong>Auto-Populated Cashbook (In)</strong>
+        <table>
+          <thead><tr><th>Inv #</th><th>Method</th><th>Amount</th><th>BIR</th></tr></thead>
+          <tbody>
+            <tr><td>SI #140</td><td>Cash + GCash</td><td>₱1,300</td><td><span class="chip active">Posted</span></td></tr>
+            <tr><td>NSI-175</td><td>Cash</td><td>₱275</td><td><span class="chip blue">Cashbook Only</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="ooux" data-ooux="biz_records" onclick="inspect('biz_records')">
+        <span class="ooux-tag">Table: daily_cash_reconciliations</span>
+        <strong>EOD Cash Box Check (Replaces SOBRA / SHORT)</strong>
+        <div class="row" style="margin-top:8px;">
+          <div style="flex:1"><small>Counted Cash Box (Exp: ₱6,250)</small><input type="number" value="${STATE.eodCash}" ${viewOnly?'disabled':''} onchange="STATE.eodCash=this.value;render()" /></div>
+          <div style="flex:1"><small>Counted GCash (Exp: ₱2,200)</small><input type="number" value="${STATE.eodGcash}" ${viewOnly?'disabled':''} onchange="STATE.eodGcash=this.value;render()" /></div>
+        </div>
+        <div class="banner ${diff===0?'green':diff>0?'amber':'red'}" style="margin-top:8px;margin-bottom:0;">
+          ${diff===0 ? 'BALANCED (₱0.00 variance)' : diff>0 ? 'SOBRA (+₱'+diff.toFixed(2)+')' : 'SHORT (-₱'+Math.abs(diff).toFixed(2)+')'}
+        </div>
+      </div>
+    `;
+    inspect('biz_records');
+  } else if (STATE.tab === 'bir') {
+    scr.innerHTML = `
+      <div class="ooux" data-ooux="bir_books" onclick="inspect('bir_books')">
+        <span class="ooux-tag">Admin Only: bir_ledger_entries</span>
+        <div class="row"><strong>4 BIR Books & Capital</strong><button class="btn btn-primary" onclick="event.stopPropagation();inspect('bir_books')">Export PDF</button></div>
+        <div class="chips">
+          ${['GL','CRJ','CDJ','GJ','Capital'].map(b => `<span class="chip ${STATE.birBook===b?'active':''}" onclick="event.stopPropagation();STATE.birBook='${b}';render()">${b}</span>`).join('')}
+        </div>
+        <div style="font-size:11px;color:var(--muted);">Auto-posts receipted (SI) sales, expenses & capital. NSI stays in Cashbook for Owner/Bookkeeper review.</div>
+        <table>
+          <thead><tr><th>Date</th><th>Ref</th><th>Account</th><th>Debit</th><th>Credit</th></tr></thead>
+          <tbody>
+            <tr><td>Nov 21</td><td>SI #140</td><td>Cash on Hand</td><td>₱1,300</td><td>—</td></tr>
+            <tr><td>Nov 21</td><td>SI #140</td><td>Sales Revenue</td><td>—</td><td>₱1,300</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="ooux" data-ooux="void_flow" onclick="inspect('void_flow')">
+        <span class="ooux-tag">Immutable: void_audit_logs</span>
+        <strong>Owner Void / Cancel Audit Log</strong>
+        <div style="font-size:12px;margin-top:6px;">
+          • <strong>SI #140</strong> voided by <em>Store Manager</em> — Reason: "Customer switched variety" (Snapshot stored; FIFO restored).
+        </div>
+      </div>
+    `;
+    inspect('bir_books');
+  }
+}
+
+function setTab(id) { STATE.tab = id; render(); }
+
+document.getElementById('roleGroup').addEventListener('click', e => {
+  if (!e.target.dataset.role) return;
+  STATE.role = e.target.dataset.role;
+  document.querySelectorAll('#roleGroup .pill-btn').forEach(b => b.classList.toggle('active', b.dataset.role === STATE.role));
+  render();
+});
+document.getElementById('deviceGroup').addEventListener('click', e => {
+  if (!e.target.dataset.dev) return;
+  STATE.device = e.target.dataset.dev;
+  document.querySelectorAll('#deviceGroup .pill-btn').forEach(b => b.classList.toggle('active', b.dataset.dev === STATE.device));
+  render();
+});
+document.getElementById('toggleTags').addEventListener('click', e => {
+  STATE.showTags = !STATE.showTags;
+  e.target.textContent = `DB Tags: ${STATE.showTags ? 'ON' : 'OFF'}`;
+  e.target.classList.toggle('active', STATE.showTags);
+  render();
+});
+
+render();
+</script>
+</body>
+</html>
